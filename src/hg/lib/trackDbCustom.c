@@ -788,6 +788,8 @@ else if (sameWord("halSnake",type))
     cType = cfgSnake;
 else if (sameWord("hic", type))
     cType = cfgHic;
+else if (sameWord("MethBase2", type))
+    cType = cfgMethBase2;
 // TODO: Only these are configurable so far
 
 if (cType == cfgNone && warnIfNecessary)
