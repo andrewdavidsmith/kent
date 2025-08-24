@@ -5,29 +5,29 @@ L += $(MYSQLLIBS) -lm
 MYLIBDIR = ../../lib/$(MACHTYPE)
 MYLIBS =  $(MYLIBDIR)/jkhgapcgi.a $(MYLIBDIR)/jkhgap.a $(MYLIBDIR)/jkweb.a
 
-A = hgMethBase2
+A = MethBase2
 
-O = hgMethBase2.o
+O = MethBase2.o
 
 include ../../inc/cgi_build_rules.mk
 
 install::
-	rm -fr ${DESTDIR}${CGI_BIN}/hgMethBase2
-	rsync -ar --exclude=CVS/ --exclude=.svn/ --delete hgMethBase2 \
+	rm -fr ${DESTDIR}${CGI_BIN}/MethBase2
+	rsync -ar --exclude=CVS/ --exclude=.svn/ --delete MethBase2 \
 		${DESTDIR}${CGI_BIN}/
-	chmod -R a+rX ${DESTDIR}${CGI_BIN}/hgMethBase2
+	chmod -R a+rX ${DESTDIR}${CGI_BIN}/MethBase2
 
 alpha::
-	rm -fr ${CGI_BIN}/hgMethBase2
-	rsync -ar --exclude=CVS/ --exclude=.svn/ --delete hgMethBase2 ${CGI_BIN}/
-	chmod -R g+w ${CGI_BIN}/hgMethBase2
-	chmod -R a+rX ${CGI_BIN}/hgMethBase2
+	rm -fr ${CGI_BIN}/MethBase2
+	rsync -ar --exclude=CVS/ --exclude=.svn/ --delete MethBase2 ${CGI_BIN}/
+	chmod -R g+w ${CGI_BIN}/MethBase2
+	chmod -R a+rX ${CGI_BIN}/MethBase2
 
 beta::
-	rm -fr ${CGI_BIN}-beta/hgMethBase2
-	rsync -ar --exclude=CVS/ --exclude=.svn/ --delete hgMethBase2 ${CGI_BIN}-beta/
-	chmod -R g+w ${CGI_BIN}-beta/hgMethBase2
-	chmod -R a+rX ${CGI_BIN}-beta/hgMethBase2
+	rm -fr ${CGI_BIN}-beta/MethBase2
+	rsync -ar --exclude=CVS/ --exclude=.svn/ --delete MethBase2 ${CGI_BIN}-beta/
+	chmod -R g+w ${CGI_BIN}-beta/MethBase2
+	chmod -R a+rX ${CGI_BIN}-beta/MethBase2
 
 compile: $O 
 	${CC} $O ${MYLIBS} ${L}
