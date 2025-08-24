@@ -1,49 +1,66 @@
-#include "cheapcgi.h"
-#include "common.h"
-#include "hCommon.h"
-#include "hdb.h"  // hAllocConn
-#include "jksql.h"
 #include <stdbool.h>
 #include <stdio.h>
 
-static inline void
-parse_hgsid(char *hgsid, char **id, char **sessionKey) {
-  char *underscore = strchr(hgsid, '_');
-  if (!underscore) {
-    errAbort("Malformed value for hgsid: %s.", hgsid);
-    return;
-  }
-  *underscore = '\0';            // terminate sessionDb.id
-  *id = hgsid;                   // sessionDb.id part of hgsid
-  *sessionKey = underscore + 1;  // sessionDb.sessionKey part of hgsid
+#include "cheapcgi.h"
+#include "hdb.h"  // hAllocConn
+#include "cartDb.h"  // cartDbParseId
+#include "jksql.h"
 
-  // Escape id and sessionKey to avoid SQL injection
-  *id = sqlEscapeString(*id);
-  *sessionKey = sqlEscapeString(*sessionKey);
-  if (isEmpty(*id) || isEmpty(*sessionKey))
-    errAbort("Failed to parse required parameters: id and sessionKey.");
-  *underscore = '_';  // put it back
+static int
+doUpdate() {
+  char db[] = "hgcentral";
+  char profile[] = "central";
+
+  char *hgsid = cgiOptionalString("hgsid");
+  if (!hgsid)
+    errAbort("Missing required parameter: hgsid.");
+
+  struct sqlConnection *conn = hAllocConnProfile(profile, db);
+  char *sessionKey = NULL;
+  const int id = cartDbParseId(hgsid, &sessionKey);
+
+  const char *contents = cgiOptionalString("contents");
+  if (!contents)
+    errAbort("Missing required parameters: contents.");
+
+  char *escapedContents = sqlEscapeString(contents);
+
+  char query[8192];
+  sqlSafef(query, sizeof(query),
+           "UPDATE sessionDb SET contents = '%s' WHERE id = '%d' AND "
+           "sessionKey = '%s';",
+           escapedContents, id, sessionKey);
+
+  sqlUpdate(conn, query);
+
+  hFreeConn(&conn);
+
+  printf("Status: 204 No Content\r\n");  // response: success, and no content
+  printf("Content-Type: text/plain\r\n\r\n");
+
+  return 0;
 }
 
-void
+static void
 doMethBaseMetadata() {
-  const char table_name[] = "MethBaseMeta";
-  const char *db = cgiOptionalString("db");
-  if (isEmpty(db)) {
+  char table_name[] = "MethBaseMeta";
+
+  char *db = cgiOptionalString("db");
+  if (!db)
     errAbort("Missing required parameter: db.");
-    return;
-  }
+
   struct sqlConnection *conn = hAllocConn(db);
   struct slName *fieldList = sqlListFields(conn, table_name);
 
   char query[1024];
   sqlSafef(query, sizeof(query), "SELECT * FROM %s", table_name);
+
   struct sqlResult *sr = sqlGetResult(conn, query);
 
   printf("\"MethBase2\": [");  // open JSON array for MethBase2
 
   char **row;
-  bool first = true;
+  int first = true;
   while ((row = sqlNextRow(sr)) != NULL) {
     if (!first)
       printf(",");  // comma to separate rows
@@ -51,64 +68,46 @@ doMethBaseMetadata() {
       first = false;
 
     printf("{");
-    int i = 0;
-    for (struct slName *field = fieldList; field; field = field->next, ++i) {
-      if (i > 0)
+    int c_idx = 0;
+    for (struct slName *field = fieldList; field; field = field->next) {
+      if (c_idx > 0)
         printf(",");  // comma to separate columns within rows
-      printf("\"%s\": \"%s\"", field->name, row[i] ? row[i] : "(NULL)");
+      printf("\"%s\": \"%s\"", field->name, row[c_idx] ? row[c_idx] : "NA");
+      ++c_idx;
     }
     printf("}");
   }
   printf("]");  // close JSON array for MethBase2
 
-  // Cleanup
-  sqlFreeResult(&sr);
+  sqlFreeResult(&sr);  // cleanup
   hFreeConn(&conn);
 }
 
-void
+static void
 doGetSession() {
+  char db[] = "hgcentral";
+  char profile[] = "central";
+
   char *hgsid = cgiOptionalString("hgsid");
-  if (isEmpty(hgsid)) {
+  if (!hgsid)
     errAbort("Missing required parameter: hgsid.");
-    return;
-  }
 
-  struct sqlConnection *conn = hAllocConnProfile("central", "hgcentral");
-  if (conn == NULL)
-    errAbort("Failed to connect to 'hgcentral' DB using profile 'central'.");
-
-  char *escapedId = NULL;
-  char *escapedSessionKey = NULL;
-  parse_hgsid(hgsid, &escapedId, &escapedSessionKey);
+  struct sqlConnection *conn = hAllocConnProfile(profile, db);
+  char *sessionKey = NULL;
+  const int id = cartDbParseId(hgsid, &sessionKey);
 
   char query[1024];
   sqlSafef(
     query, sizeof(query),
-    "SELECT contents FROM sessionDb WHERE id = '%s' AND sessionKey = '%s';",
-    escapedId, escapedSessionKey);
+    "SELECT contents FROM sessionDb WHERE id = '%d' AND sessionKey = '%s';", id,
+    sessionKey);
 
-  struct sqlResult *sr = sqlGetResult(conn, query);
+  printf("\"sessionDb.contents\": \"%s\"", sqlNeedQuickString(conn, query));
 
-  char **row = sqlNextRow(sr);
-
-  if (row == NULL)
-    errAbort("Failed to match id=%s and sessionKey=%s in hgcentral.sessionDb",
-             escapedId, escapedSessionKey);
-  printf("\"sessionDb.contents\": \"%s\"", row[0]);
-
-  if (sqlNextRow(sr))
-    errAbort("More than one row matches id=%s and sessionKey=%s", escapedId,
-             escapedSessionKey);
-
-  // cleanup
-  hFreeConn(&conn);
-  sqlFreeResult(&sr);
-  free(escapedSessionKey);
-  free(escapedId);
+  hFreeConn(&conn);  // cleanup
 }
 
-void
+static int
 doMethBase() {
   // send HTTP header
   printf("Content-Type: application/json\n\n");
@@ -117,11 +116,18 @@ doMethBase() {
   printf(",");  // separate the JSON parts
   doGetSession();
   printf("}");  // end JSON
+  return 0;
 }
 
 int
 main(int argc, char *argv[]) {
   cgiSpoof(&argc, argv);
-  doMethBase();
-  return 0;
+  char *action = cgiOptionalString("action");
+  if (!action)
+    errAbort("Missing required parameter: action");
+  const bool is_update = sameWord(action, "update");
+  if (!is_update && !sameWord(action, "metadata"))
+    errAbort("invalid param: action=%s (must be %s or %s)", action, "update",
+             "metadata");
+  return is_update ? doUpdate() : doMethBase();
 }
