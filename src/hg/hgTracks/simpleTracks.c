@@ -6016,6 +6016,47 @@ linkedFeaturesSeriesMethods(tg);
 tg->loadItems = loadBacEndPairs;
 }
 
+/* Functions associated with MethBase2 */
+
+void
+MethBase2MethodsDontLoadItems(struct track *tg)
+/* No-op loadItems when we aren't going to try. */
+{
+}
+
+static void
+MethBase2Methods(struct track *tg) {
+/* ADS: This is fake and just exists so something is defined for the
+ * parent MethBase2 track */
+    tg->bedSize = 4;
+    bedMethods(tg);
+    tg->loadItems = MethBase2MethodsDontLoadItems;
+}
+
+static void
+MethBase2HmrMethods(struct track *tg) {
+/* HMRs are a BED4 (not using score or direction yet) that is always
+ * dense because they can't overlap by definition and are bigBed */
+{
+    bedMethods(tg);
+    tg->bedSize = 4;
+    tg->loadItems = loadSimpleBed;
+    tg->limitedVis = tvDense;
+    tg->limitedVisSet = TRUE;
+    tg->isBigBed = TRUE;
+}
+
+static void
+MethBase2LevelsMethods(struct track *tg, struct trackDb *tdb, int wordCount,
+                       char *words[])
+/* ADS: Just a bigWig set to always show full; surely a better
+ * way to accomplish that */
+{
+    bigWigMethods(tg, tdb, wordCount, words);
+    tg->limitedVisSet = TRUE;
+    tg->limitedVis = tvFull;
+}
+
 #endif /* GBROWSE */
 
 
@@ -14985,6 +15026,18 @@ else if (sameWord(type, "bedGraph"))
 else if (sameWord(type, "bigWig"))
     {
     bigWigMethods(track, tdb, wordCount, words);
+    }
+else if (sameWord(type, "MethBase2"))
+    {
+    MethBase2Methods(track);
+    }
+else if (sameWord(type, "hmr"))
+    {
+    MethBase2HmrMethods(track);
+    }
+else if (sameWord(type, "levels"))
+    {
+    MethBase2LevelsMethods(track, tdb, wordCount, words);
     }
 else
 #endif /* GBROWSE */
