@@ -458,6 +458,7 @@ typedef enum _eCfgType
     cfgHic      =17,
     cfgBigDbSnp =19,
     cfgBigRmsk  =20,
+    cfgMethBase2=21,
     cfgUndetermined // Not specifically denied, but not determinable in lib code
     } eCfgType;
 
