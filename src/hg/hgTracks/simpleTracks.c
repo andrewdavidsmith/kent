@@ -6034,7 +6034,7 @@ MethBase2Methods(struct track *tg) {
 }
 
 static void
-MethBase2HmrMethods(struct track *tg) {
+MethBase2HmrMethods(struct track *tg)
 /* HMRs are a BED4 (not using score or direction yet) that is always
  * dense because they can't overlap by definition and are bigBed */
 {
