@@ -3048,7 +3048,7 @@ if (!ajax) // ajax asks for a simple cfg dialog for right-click popup or hgTrack
     // Composites *might* have had their top level controls just printed,
     // but almost certainly have additional controls
     boolean isLogo = (trackDbSetting(tdb, "logo") != NULL);
-    if (tdbIsComposite(tdb) && !isLogo)  // for the moment generalizing this to include other containers...
+    if (!sameString(tdb->type, "MethBase2") && tdbIsComposite(tdb) && !isLogo) // for the moment generalizing this to include other containers...
         hCompositeUi(db, cart, tdb, NULL, NULL, MAIN_FORM);
 
     // Additional special case navigation links may be added
