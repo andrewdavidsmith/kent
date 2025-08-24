@@ -4917,6 +4917,17 @@ wigOption(cart, name, title, leafTdb);
 cfgEndBox(boxed);
 }
 
+static void
+MethBase2CfgUi() {
+    /* ADS: MethBase2-specific controls */
+    printf("<style>\n");
+    printf("body.cgi {background: #F0F0F0;}\n");
+    printf("table.hgInside {background: #FFFFFF;}\n");
+    printf("</style>\n");
+    printf("<div id='MethBase2-placeholder'></div>\n");
+    printf("<script type='text/javascript' src='../js/MethBase2.js'></script>\n");
+}
+
 void cfgByCfgType(eCfgType cType,char *db, struct cart *cart, struct trackDb *tdb,char *prefix,
 	      char *title, boolean boxed)
 // Methods for putting up type specific cfgs used by composites/subtracks in hui.c
@@ -4993,6 +5004,8 @@ switch(cType)
     case cfgHic:        hicCfgUi(db,cart,tdb,prefix,title,boxed);
                         break;
     case cfgBigDbSnp:   bigDbSnpCfgUi(db, cart, tdb, prefix, title, boxed);
+                        break;
+    case cfgMethBase2:  MethBase2CfgUi();
                         break;
     default:            warn("Track type is not known to multi-view composites. type is: %d ",
 			     cType);
