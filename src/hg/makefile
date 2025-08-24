@@ -120,7 +120,8 @@ UTILS_APPLIST = \
 	sqlToXml \
 	trfBig \
 	xmlCat \
-	xmlToSql
+	xmlToSql \
+	MethBase2
 
 # List of directories to build at UCSC
 UTIL_DIRS = \
@@ -223,7 +224,8 @@ UTIL_DIRS = \
 	utils \
 	uniqSize \
 	updateStsInfo \
-	visiGene/knownToVisiGene
+	visiGene/knownToVisiGene \
+	MethBase2
 
 APPS = $(UTIL_DIRS) $(UTILS_APPLIST)
 
