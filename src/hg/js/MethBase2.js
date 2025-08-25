@@ -3,13 +3,12 @@ $(function() {
     const DATATABLES_URL = "https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js";
     const DT_SELECT_URL = "https://cdn.datatables.net/select/1.7.0/js/dataTables.select.min.js";
     const REMOTE_CSS_URLS = [
-	"https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css", // datatable css
-	"https://cdn.datatables.net/select/1.7.0/css/select.dataTables.min.css", // dt select css
+        "https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css", // datatable css
+        "https://cdn.datatables.net/select/1.7.0/css/select.dataTables.min.css", // dt select css
     ];
-    const MAX_CHECKBOX_ELEMENTS = 20;  // max checkboxes to show in
-				       // groupings on the lhs of the
-				       // page
-    
+    const MAX_CHECKBOX_ELEMENTS = 20;  // max checkboxes to show in groupings
+                                       // on the lhs of the page
+
     // --- CSS Styles ---
     const INLINE_CSS = `
     #container {
@@ -57,6 +56,12 @@ $(function() {
     #theDataTable {
         width: 100% !important;
         box-sizing: border-box;
+        responsive: true;
+    }
+    #theDataTable td:nth-child(n+2),
+    #theDataTable th:nth-child(n+2) {
+        white-space: nowrap;
+        min-width: 100px; /* Adjust width as needed */
     }
     #theDataTable .select-checkbox {
         width: 1em !important;   /* force narrow width */
@@ -82,9 +87,9 @@ $(function() {
     `;
 
     const excludedFromCheckboxes = new Set([
-	"accession",
+        "accession",
     ]);
-    
+
     function escapeRegex(str) {
         return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
@@ -93,66 +98,66 @@ $(function() {
     const hgsid = urlParams.get("hgsid");
     const db = urlParams.get("db");
     const [id, sessionKey] = hgsid.split('_');
-    
+
     function addSafeSessionParam(sessionDbContents) {
-	const newParams = new URLSearchParams({
-	    "hgsid": hgsid,
-	    "action": "update",
-	    "contents": sessionDbContents,
-	});
-	fetch('/cgi-bin/MethBase2', {
-	    "method": 'POST',
-	    "headers": {
-		'Content-Type': 'application/x-www-form-urlencoded'
-	    },
-	    "body": newParams.toString(),
-	}).then(() => {
-	    const newParams = new URLSearchParams({
-		"hgsid": hgsid,
-		"g": 'MethBase2',
-	    });
-	    fetch('/cgi-bin/hgTrackUi', {
-		"method": 'POST',
-		"headers": {
-		    'Content-Type': 'application/x-www-form-urlencoded'
-		},
-		"body": newParams.toString(),
-	    });
-	});
+        const paramsForUpdate = new URLSearchParams({
+            "hgsid": hgsid,
+            "action": "update",
+            "contents": sessionDbContents,
+        });
+        fetch('/cgi-bin/MethBase2', {
+            "method": 'POST',
+            "headers": {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            "body": paramsForUpdate.toString(),
+        }).then(() => {
+            const paramsForReturnToBrowser = new URLSearchParams({
+                "hgsid": hgsid,
+                "g": 'MethBase2',
+            });
+            fetch('/cgi-bin/hgTrackUi', {
+                "method": 'POST',
+                "headers": {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                "body": paramsForReturnToBrowser.toString(),
+            });
+        });
     }
-    
+
     // Inject inline CSS
     document.head.appendChild(
-	Object.assign(document.createElement("style"), {
-	    textContent: INLINE_CSS,
-	})
+        Object.assign(document.createElement("style"), {
+            textContent: INLINE_CSS,
+        })
     );
-    
-    // Load remote CSS 
+
+    // Load remote CSS
     for (const href of REMOTE_CSS_URLS) {
-	document.head.appendChild(Object.assign(document.createElement("link"), {
+        document.head.appendChild(Object.assign(document.createElement("link"), {
             rel: "stylesheet",
             href,
-	}));
+        }));
     }
-    
+
     window.addEventListener('beforeunload', function (e) {
-	e.preventDefault(); // some browsers need this?
-	e.returnValue = '';
+        e.preventDefault(); // some browsers need this?
+        e.returnValue = '';
     });
-    
+
     document.addEventListener('keydown', e => {
-	if (e.key === 'Enter') {
-	    e.preventDefault();
-	    e.stopPropagation();
-	}
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+        }
     }, true);
-    
+
     function initHTML() {
-	// Add container
+        // Add container
         const container = document.createElement("div");
         container.id = "myTag";  // need to have some named scope here
-	// style below is set to match UCSC vis control
+        // style below is set to match UCSC vis control
         container.innerHTML = `
         <label for="modeSwitcher" style="display: inline-block; width: 110px;">
             <b>Data&nbsp;type:&nbsp;</b>
@@ -181,28 +186,28 @@ $(function() {
     }
 
     function initTableAndFilters(allData) {
-	data = allData["MethBase2"];
+        data = allData["MethBase2"];
         if (!data.length) return;
-	
-	hgcentralUri = new URLSearchParams(allData["sessionDb.contents"]);
-	
-	// identify the previously selected accessions and which data
-	// type had been turned on
-	const selectedAccessions = new Set();
-	const accessionRegex = /^[DES]RX\d+_(hmr|levels)_sel$/;
-	var modeInit = "";
-	for (const [key, value] of hgcentralUri) {
-	    if (accessionRegex.test(key) && value != "0") {
-		const [accession, dataType] = key.split('_');
-		selectedAccessions.add(accession);
-		const expected = dataType === "hmr" ? "hmr" : "levels";
-		modeInit = (modeInit === "" || modeInit === expected) ? expected : "both";
-	    }
-	}
 
-	document.getElementById('modeSwitcher').value =
-	    modeInit !== "" ? modeInit : "hmr";
-	
+        hgcentralUri = new URLSearchParams(allData["sessionDb.contents"]);
+
+        // identify the previously selected accessions and which data
+        // type had been turned on
+        const selectedAccessions = new Set();
+        const accessionRegex = /^[DES]RX\d+_(hmr|levels)_sel$/;
+        var modeInit = "";
+        for (const [key, value] of hgcentralUri) {
+            if (accessionRegex.test(key) && value != "0") {
+                const [accession, dataType] = key.split('_');
+                selectedAccessions.add(accession);
+                const expected = dataType === "hmr" ? "hmr" : "levels";
+                modeInit = (modeInit === "" || modeInit === expected) ? expected : "both";
+            }
+        }
+
+        document.getElementById('modeSwitcher').value =
+            modeInit !== "" ? modeInit : "hmr";
+
         const possibleValues = {};
         data.forEach(entry => {
             for (const [key, val] of Object.entries(entry)) {
@@ -225,17 +230,17 @@ $(function() {
             title: key
         }));
 
-	const checkboxColumn = {
-	    data: null,
-	    orderable: false,
-	    className: 'select-checkbox',
-	    defaultContent: '',
-	    title: `
+        const checkboxColumn = {
+            data: null,
+            orderable: false,
+            className: 'select-checkbox',
+            defaultContent: '',
+            title: `
             <label title="Select all visible rows" style="cursor:pointer; user-select:none;">
             <input type="checkbox" id="select-all" /></label>
             `,
-	    // no render function needed
-	};
+            // no render function needed
+        };
 
         const columns = [checkboxColumn, ...dynamicColumns];
 
@@ -245,83 +250,88 @@ $(function() {
             order: [[1, 'asc']],  // sort by the first real data column, not checkbox
             pageLength: 50,   // show 50 rows per page instead of the default 10
             lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
-	    select: {
-		style: 'multi',
-		selector: 'td:first-child'
-	    },
-	    initComplete: function() {
-		const api = this.api();
-		api.rows().every(function() {
-		    const rowData = this.data();
-		    if (selectedAccessions.has(rowData.accession)) {
-			this.select();  // Select (check) the row
-		    }
-		});
-	    }
+            select: {
+                style: 'multi',
+                selector: 'td:first-child'
+            },
+            initComplete: function() {
+                const api = this.api();
+                api.rows().every(function() {
+                    const rowData = this.data();
+                    if (selectedAccessions.has(rowData.accession)) {
+                        this.select();  // Select (check) the row
+                    }
+                });
+            },
+            drawCallback: function() {  // Reset header "select all" checkbox
+                $('#select-all')
+                    .prop('checked', false)
+                    .prop('indeterminate', false);
+            },
         });
-	
+
         const thead = document.querySelector('#theDataTable thead');
         const row = thead.insertRow();
 
         columns.forEach((col, index) => {
             const cell = row.insertCell();
-	    if (col.className === 'select-checkbox') {
-		const label = document.createElement('label');
-		label.style.cursor = 'pointer';
-		label.style.userSelect = 'none';
-		label.title = 'Show only selected rows';
-		const checkbox = document.createElement('input');
-		checkbox.type = 'checkbox';
-		checkbox.dataset.selectFilter = 'true';
-		checkbox.style.cursor = 'pointer';
-		label.appendChild(checkbox);
-		cell.appendChild(label);
-		return;
-	    }
+            if (col.className === 'select-checkbox') {
+                const label = document.createElement('label');
+                label.style.cursor = 'pointer';
+                label.style.userSelect = 'none';
+                label.title = 'Show only selected rows';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.dataset.selectFilter = 'true';
+                checkbox.style.cursor = 'pointer';
+                label.appendChild(checkbox);
+                cell.appendChild(label);
+                return;
+            }
             const input = document.createElement('input');
             input.type = 'text';
             input.placeholder = 'Search...';
             input.style.width = '100%';
-	    cell.appendChild(input);
+            cell.appendChild(input);
         });
 
-	$('#theDataTable thead input[type="text"]').on('keyup change', function () {
+        $('#theDataTable thead input[type="text"]').on('keyup change', function () {
             const colIndex = $(this).parent().index();
             table.column(colIndex).search(this.value).draw();
         });
 
-	$.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
-	    const filterInput = document.querySelector('input[data-select-filter]');
-	    const onlySelected = filterInput?.checked;
-	    
-	    // If checkbox is not checked, show all rows
-	    if (!onlySelected) return true;
-	    
-	    // Otherwise, only show selected rows
-	    const row = table.row(dataIndex);
-	    return row.select && row.selected();
-	});
+        $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+            const filterInput = document.querySelector('input[data-select-filter]');
+            const onlySelected = filterInput?.checked;
 
-	$('#theDataTable thead input[data-select-filter]').on('change', function () {
-	    table.draw();
-	});
-	
-	$('#theDataTable thead').on('click', '#select-all', function () {
-	    const isChecked = this.checked;
-	    if (isChecked) {
-		table.rows({ page: 'current' }).select();
-	    } else {
-		table.rows({ page: 'current' }).deselect();
-	    }
-	});
+            // If checkbox is not checked, show all rows
+            if (!onlySelected) return true;
+
+            // Otherwise, only show selected rows
+            const row = table.row(dataIndex);
+            return row.select && row.selected();
+        });
+
+        $('#theDataTable thead input[data-select-filter]').on('change', function () {
+            table.draw();
+        });
+
+        $('#theDataTable thead').on('click', '#select-all', function () {
+            const isChecked = this.checked;
+            if (isChecked) {
+                table.rows({ page: 'current' }).select();
+            } else {
+                table.rows({ page: 'current' }).deselect();
+            }
+        });
 
         const filtersDiv = document.getElementById("filters");
 
         const checkboxGroupIndexes = [];
 
         orderedColumnNames.forEach((key, colIdx) => {
-	    // no checkboxes for excluded keys
-            if (excludedFromCheckboxes.has(key)) return;  
+            // no checkboxes for excluded keys
+            if (excludedFromCheckboxes.has(key)) return;
 
             const groupDiv = document.createElement("div");
             groupDiv.dataset.colidx = colIdx;  // store the column index here
@@ -331,7 +341,14 @@ $(function() {
             heading.textContent = key;
             groupDiv.appendChild(heading);
 
-            const topToShow = sortedPossibleValues[key].slice(0, MAX_CHECKBOX_ELEMENTS);
+            const topToShow = sortedPossibleValues[key]
+                  .filter(([val, _]) => val.trim().toUpperCase() !== 'NA')
+                  .slice(0, MAX_CHECKBOX_ELEMENTS);
+                // .map(([val, _]) => val); // get just the values
+            // const topToShow = sortedPossibleValues[key]
+            //    .filter(([count, val]) => val !== 'NA')
+            //    .slice(0, MAX_CHECKBOX_ELEMENTS);
+            // const topToShow = sortedPossibleValues[key].slice(0, MAX_CHECKBOX_ELEMENTS);
             topToShow.forEach(([val, count]) => {
                 const label = document.createElement("label");
                 const checkbox = document.createElement("input");
@@ -349,70 +366,72 @@ $(function() {
         checkboxGroupIndexes.forEach((colIdx, idx) => {
             const groupDiv = filtersDiv.children[idx];
             const checkboxes = [...groupDiv.querySelectorAll('input[type=checkbox]')];
-	    // --- add a set of checkboxes for this group ---
+            // --- add a set of checkboxes for this group ---
             checkboxes.forEach(cb => {
                 cb.addEventListener('change', () => {
                     const checked = checkboxes.filter(c => c.checked).map(c => c.value);
-		    const searchStr = checked.length ? '^(' + checked.join('|') + ')$' : '';
+                    const searchStr = checked.length ? '^(' + checked.join('|') + ')$' : '';
                     table.column(colIdx + 1).search(searchStr, true, false).draw();
                 });
             });
-	    // --- add 'clear' button ---
-	    const clearBtn = document.createElement("button");
-	    clearBtn.textContent = "Clear";
-	    clearBtn.type = "button"; // prevent form submission if inside a form
-	    clearBtn.addEventListener("click", () => {
-		// Uncheck all checkboxes
-		checkboxes.forEach(cb => cb.checked = false);
-		// Recalculate the (now empty) string term and update table
-		table.column(colIdx + 1).search('', true, false).draw();
-	    });
-	    // Prepend the 'clear' button
-	    groupDiv.insertBefore(clearBtn, groupDiv.children[1] || null);
-	});
-	
-	document.getElementById('Submit').addEventListener('click', (e) => {
-	    const selectedData = table.rows({ selected: true }).data().toArray();
-	    const accessionRegex = /^[DES]RX\d+_(hmr|levels)_sel$/
-	    for (const [key, value] of [...hgcentralUri]) {
-		const [prefix] = key.split('_');
-		if (accessionRegex.test(key) && !selectedData.includes(prefix)) {
-		    hgcentralUri.delete(key);
-		}
-	    }
-	    const mode = document.getElementById("modeSwitcher").value;
-	    for (const obj of selectedData) {
-		if (mode === "hmr") {
-		    hgcentralUri.set(obj.accession + '_hmr_sel', "1");
-		} else if (mode === "levels") {
-		    hgcentralUri.set(obj.accession + '_levels_sel', "1");
-		} else if (mode === "both") {
-		    hgcentralUri.set(obj.accession + '_hmr_sel', "1");
-		    hgcentralUri.set(obj.accession + '_levels_sel', "1");
-		}
-	    }
-	    addSafeSessionParam(hgcentralUri);
-	});
+            // --- add 'clear' button ---
+            const clearBtn = document.createElement("button");
+            clearBtn.textContent = "Clear";
+            clearBtn.type = "button"; // prevent form submission if inside a form
+            clearBtn.addEventListener("click", () => {
+                // Uncheck all checkboxes
+                checkboxes.forEach(cb => cb.checked = false);
+                // Recalculate the (now empty) string term and update table
+                table.column(colIdx + 1).search('', true, false).draw();
+            });
+            // Prepend the 'clear' button
+            groupDiv.insertBefore(clearBtn, groupDiv.children[1] || null);
+        });
+
+        document.getElementById('Submit').addEventListener('click', (e) => {
+            const selectedData = table.rows({ selected: true }).data().toArray();
+            const accessionRegex = /^[DES]RX\d+_(hmr|levels)_sel$/
+            for (const [key, value] of [...hgcentralUri]) {
+                const [prefix] = key.split('_');
+                if (accessionRegex.test(key) && !selectedData.includes(prefix)) {
+                    hgcentralUri.delete(key);
+                }
+            }
+            const mode = document.getElementById("modeSwitcher").value;
+            for (const obj of selectedData) {
+                if (mode === "hmr") {
+                    hgcentralUri.set(obj.accession + '_hmr_sel', "1");
+                } else if (mode === "levels") {
+                    hgcentralUri.set(obj.accession + '_levels_sel', "1");
+                } else if (mode === "both") {
+                    hgcentralUri.set(obj.accession + '_hmr_sel', "1");
+                    hgcentralUri.set(obj.accession + '_levels_sel', "1");
+                }
+            }
+            addSafeSessionParam(hgcentralUri);
+        });
     }
 
     function loadDataAndInit() {
-	const params = new URLSearchParams({
-	    "hgsid": hgsid,
-	    "db": db,
-	    "action": "metadata",
-	});
-	const request = new Request('/cgi-bin/MethBase2', {
-	    method: 'POST',
-	    headers: {
-		'Content-Type': 'application/x-www-form-urlencoded'
-	    },
-	    body: params.toString()
-	});
-	fetch(request)
-	    .then(r => r.json())
-	    .then(jsonData => initTableAndFilters(jsonData));
+        const params = new URLSearchParams({
+            "hgsid": hgsid,
+            "db": db,
+            // ADS: uncomment below for gzip delivery
+            // "gzip": "1",
+            "action": "metadata",
+        });
+        const request = new Request('/cgi-bin/MethBase2', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: params.toString()
+        });
+        fetch(request)
+            .then(r => r.json())
+            .then(jsonData => initTableAndFilters(jsonData));
     }
-    
+
     function whenReady(callback) {
         if (document.readyState === "loading") {
             document.addEventListener("DOMContentLoaded", callback);
@@ -422,24 +441,24 @@ $(function() {
     }
 
     function loadIfMissing(condition, url, callback) {
-	if (condition) {
-	    const s = document.createElement("script");
-	    s.src = url;
-	    s.onload = callback;
-	    document.head.appendChild(s);
-	} else {
-	    callback();
-	}
+        if (condition) {
+            const s = document.createElement("script");
+            s.src = url;
+            s.onload = callback;
+            document.head.appendChild(s);
+        } else {
+            callback();
+        }
     }
-    
+
     loadIfMissing(typeof jQuery === "undefined", JQUERY_URL, () => {
-	loadIfMissing(typeof jQuery.fn.DataTable === "undefined", DATATABLES_URL, () => {
+        loadIfMissing(typeof jQuery.fn.DataTable === "undefined", DATATABLES_URL, () => {
             loadIfMissing(typeof jQuery.fn.dataTable?.select === "undefined", DT_SELECT_URL, () => {
-		whenReady(() => {
+                whenReady(() => {
                     initHTML();
                     loadDataAndInit();
-		});
+                });
             });
-	});
+        });
     });
 });
