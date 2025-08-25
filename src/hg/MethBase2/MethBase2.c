@@ -1,10 +1,13 @@
-#include <stdbool.h>
-#include <stdio.h>
-
+// clang-format off
 #include "cheapcgi.h"
+#include "common.h"
 #include "hdb.h"  // hAllocConn
 #include "cartDb.h"  // cartDbParseId
 #include "jksql.h"
+// clang-format on
+
+#include <stdio.h>
+#include <zlib.h>
 
 static int
 doUpdate() {
@@ -42,7 +45,18 @@ doUpdate() {
 }
 
 static void
-doMethBaseMetadata() {
+write_output(gzFile gz, const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  if (gz)
+    gzvprintf(gz, fmt, args);
+  else
+    vprintf(fmt, args);
+  va_end(args);
+}
+
+static void
+doMethBaseMetadata(gzFile gz) {
   char table_name[] = "MethBaseMeta";
 
   char *db = cgiOptionalString("db");
@@ -57,34 +71,35 @@ doMethBaseMetadata() {
 
   struct sqlResult *sr = sqlGetResult(conn, query);
 
-  printf("\"MethBase2\": [");  // open JSON array for MethBase2
+  write_output(gz, "\"MethBase2\": [");  // open JSON array for MethBase2
 
   char **row;
-  int first = true;
+  boolean first = TRUE;
   while ((row = sqlNextRow(sr)) != NULL) {
     if (!first)
-      printf(",");  // comma to separate rows
+      write_output(gz, ",");  // comma to separate rows
     else
-      first = false;
+      first = FALSE;
 
-    printf("{");
+    write_output(gz, "{");
     int c_idx = 0;
     for (struct slName *field = fieldList; field; field = field->next) {
       if (c_idx > 0)
-        printf(",");  // comma to separate columns within rows
-      printf("\"%s\": \"%s\"", field->name, row[c_idx] ? row[c_idx] : "NA");
+        write_output(gz, ",");  // comma to separate columns within rows
+      write_output(gz, "\"%s\": \"%s\"", field->name,
+                   row[c_idx] ? row[c_idx] : "NA");
       ++c_idx;
     }
-    printf("}");
+    write_output(gz, "}");
   }
-  printf("]");  // close JSON array for MethBase2
+  write_output(gz, "]");  // close JSON array for MethBase2
 
   sqlFreeResult(&sr);  // cleanup
   hFreeConn(&conn);
 }
 
 static void
-doGetSession() {
+doGetSession(gzFile gz) {
   char db[] = "hgcentral";
   char profile[] = "central";
 
@@ -102,32 +117,62 @@ doGetSession() {
     "SELECT contents FROM sessionDb WHERE id = '%d' AND sessionKey = '%s';", id,
     sessionKey);
 
-  printf("\"sessionDb.contents\": \"%s\"", sqlNeedQuickString(conn, query));
+  write_output(gz, "\"sessionDb.contents\": \"%s\"",
+               sqlNeedQuickString(conn, query));
 
   hFreeConn(&conn);  // cleanup
 }
 
 static int
-doMethBase() {
-  // send HTTP header
-  printf("Content-Type: application/json\n\n");
-  printf("{");  // start JSON
-  doMethBaseMetadata();
-  printf(",");  // separate the JSON parts
-  doGetSession();
-  printf("}");  // end JSON
+doMethBase(boolean use_gzip) {
+  // send HTTP headers (with Content-Encoding: gzip)
+  printf("Content-Type: application/json\r\n");
+  if (use_gzip) {
+    printf("Content-Encoding: gzip\r\n");
+  }
+  printf("\r\n");  // End headers
+
+  fflush(stdout);  // Make sure headers are sent
+
+  // wrap stdout in gzip stream if requested
+  gzFile gz = use_gzip ? gzdopen(fileno(stdout), "wb") : NULL;
+  if (use_gzip && !gz) {
+    fprintf(stderr, "Failed to open gzip stream on stdout\n");
+    return 1;
+  }
+
+  write_output(gz, "{");
+  doMethBaseMetadata(gz);
+  write_output(gz, ",");  // separate the JSON parts
+  doGetSession(gz);
+  write_output(gz, "}");  // end JSON
+
+  // flush and close gzip stream
+  if (gz) {
+    gzflush(gz, Z_SYNC_FLUSH);
+    gzclose(gz);
+  }
   return 0;
 }
 
 int
 main(int argc, char *argv[]) {
   cgiSpoof(&argc, argv);
+
   char *action = cgiOptionalString("action");
   if (!action)
     errAbort("Missing required parameter: action");
-  const bool is_update = sameWord(action, "update");
-  if (!is_update && !sameWord(action, "metadata"))
+  const boolean is_update = sameWord(action, "update");
+  if (is_update)
+    return doUpdate();
+
+  if (!sameWord(action, "metadata"))
     errAbort("invalid param: action=%s (must be %s or %s)", action, "update",
              "metadata");
-  return is_update ? doUpdate() : doMethBase();
+
+  boolean useGzip = FALSE;
+  char *gzipToken = cgiOptionalString("gzip");
+  if (gzipToken != NULL && sameString(gzipToken, "1"))
+    useGzip = TRUE;
+  return doMethBase(useGzip);
 }
