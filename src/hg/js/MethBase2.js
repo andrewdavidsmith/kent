@@ -344,11 +344,6 @@ $(function() {
             const topToShow = sortedPossibleValues[key]
                   .filter(([val, _]) => val.trim().toUpperCase() !== 'NA')
                   .slice(0, MAX_CHECKBOX_ELEMENTS);
-                // .map(([val, _]) => val); // get just the values
-            // const topToShow = sortedPossibleValues[key]
-            //    .filter(([count, val]) => val !== 'NA')
-            //    .slice(0, MAX_CHECKBOX_ELEMENTS);
-            // const topToShow = sortedPossibleValues[key].slice(0, MAX_CHECKBOX_ELEMENTS);
             topToShow.forEach(([val, count]) => {
                 const label = document.createElement("label");
                 const checkbox = document.createElement("input");
