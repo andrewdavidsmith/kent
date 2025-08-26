@@ -56,16 +56,16 @@ $(function() {
     #theDataTable {
         width: 100% !important;
         box-sizing: border-box;
-        responsive: true;
     }
     #theDataTable td:nth-child(n+2),
     #theDataTable th:nth-child(n+2) {
-        white-space: nowrap;
-        min-width: 100px; /* Adjust width as needed */
+        vertical-align: top;
+        /* white-space: nowrap; */
+        /* overflow: hidden;          /* hide overflow */
+        min-width: 50px; /* Adjust width as needed */
     }
     #theDataTable .select-checkbox {
         width: 1em !important;   /* force narrow width */
-        vertical-align: middle;  /* align checkbox nicely */
     }
     #theDataTable input.row-select {
         /* additional checkbox styling */
@@ -85,6 +85,14 @@ $(function() {
         background-color: #d3eaff; /* Light blue on hover */
     }
     `;
+
+    function toTitleCase(str) {
+        return str
+            .toLowerCase()
+            .split(/[_\s-]+/) // split on underscore, space, or hyphen
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
 
     const excludedFromCheckboxes = new Set([
         "accession",
@@ -141,10 +149,11 @@ $(function() {
         }));
     }
 
-    window.addEventListener('beforeunload', function (e) {
-        e.preventDefault(); // some browsers need this?
-        e.returnValue = '';
-    });
+    /// ADS: Uncomment this to ask the user on leaving page or refresh
+    // window.addEventListener('beforeunload', function (e) {
+    //     e.preventDefault(); // some browsers need this?
+    //     e.returnValue = '';
+    // });
 
     document.addEventListener('keydown', e => {
         if (e.key === 'Enter') {
@@ -227,7 +236,7 @@ $(function() {
         const orderedColumnNames = Object.keys(possibleValues);
         const dynamicColumns = orderedColumnNames.map(key => ({
             data: key,
-            title: key
+            title: toTitleCase(key),
         }));
 
         const checkboxColumn = {
@@ -243,13 +252,15 @@ $(function() {
         };
 
         const columns = [checkboxColumn, ...dynamicColumns];
-
         const table = $('#theDataTable').DataTable({
             data: data,
+            deferRender: true,
             columns: columns,
+            responsive: true,
+            // autoWidth: true,         // Helps columns shrink to fit content
             order: [[1, 'asc']],  // sort by the first real data column, not checkbox
-            pageLength: 50,   // show 50 rows per page instead of the default 10
-            lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+            pageLength: 100,   // show 50 rows per page instead of the default 10
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
             select: {
                 style: 'multi',
                 selector: 'td:first-child'
@@ -338,7 +349,7 @@ $(function() {
 
             // Add the heading and the filtered checkboxes (only top N)
             const heading = document.createElement("strong");
-            heading.textContent = key;
+            heading.textContent = toTitleCase(key);
             groupDiv.appendChild(heading);
 
             const topToShow = sortedPossibleValues[key]
@@ -408,13 +419,27 @@ $(function() {
     }
 
     function loadDataAndInit() {
+        const CACHE_KEY = 'MethBaseMetaData';
+        const CACHE_TIMESTAMP_KEY = 'MethBaseMetaDataTimestamp';
+        const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+        const now = Date.now();
+        const cachedStr = localStorage.getItem(CACHE_KEY);
+        const cachedTimestamp = parseInt(localStorage.getItem(CACHE_TIMESTAMP_KEY), 10);
+
+        let cachedData = cachedStr ? JSON.parse(cachedStr) : null;
+        let useCache = cachedData &&
+            cachedTimestamp && (now - cachedTimestamp < CACHE_EXPIRY_MS);
+
         const params = new URLSearchParams({
             "hgsid": hgsid,
             "db": db,
             // ADS: uncomment below for gzip delivery
             // "gzip": "1",
             "action": "metadata",
+            "refresh": useCache ? "0" : "1",
         });
+
         const request = new Request('/cgi-bin/MethBase2', {
             method: 'POST',
             headers: {
@@ -422,9 +447,20 @@ $(function() {
             },
             body: params.toString()
         });
+
         fetch(request)
-            .then(r => r.json())
-            .then(jsonData => initTableAndFilters(jsonData));
+            .then(res => res.json())
+            .then(newData => {
+                if (useCache) {
+                    newData["MethBase2"] = cachedData;
+                    initTableAndFilters(newData);
+                } else {
+                    // Save new data to cache
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(newData["MethBase2"]))
+                    localStorage.setItem(CACHE_TIMESTAMP_KEY, now.toString());
+                    initTableAndFilters(newData);
+                }
+            });
     }
 
     function whenReady(callback) {
