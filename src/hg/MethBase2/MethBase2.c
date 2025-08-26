@@ -124,12 +124,11 @@ doGetSession(gzFile gz) {
 }
 
 static int
-doMethBase(boolean use_gzip) {
+doMethBase(boolean use_gzip, boolean refresh) {
   // send HTTP headers (with Content-Encoding: gzip)
   printf("Content-Type: application/json\r\n");
-  if (use_gzip) {
+  if (use_gzip)
     printf("Content-Encoding: gzip\r\n");
-  }
   printf("\r\n");  // End headers
 
   fflush(stdout);  // Make sure headers are sent
@@ -142,8 +141,10 @@ doMethBase(boolean use_gzip) {
   }
 
   write_output(gz, "{");
-  doMethBaseMetadata(gz);
-  write_output(gz, ",");  // separate the JSON parts
+  if (refresh) {
+    doMethBaseMetadata(gz);
+    write_output(gz, ",");  // separate the JSON parts
+  }
   doGetSession(gz);
   write_output(gz, "}");  // end JSON
 
@@ -174,5 +175,11 @@ main(int argc, char *argv[]) {
   char *gzipToken = cgiOptionalString("gzip");
   if (gzipToken != NULL && sameString(gzipToken, "1"))
     useGzip = TRUE;
-  return doMethBase(useGzip);
+
+  boolean refreshMetaData = FALSE;
+  char *refreshMetaDataToken = cgiOptionalString("refresh");
+  if (refreshMetaDataToken != NULL && sameString(refreshMetaDataToken, "1"))
+    refreshMetaData = TRUE;
+
+  return doMethBase(useGzip, refreshMetaData);
 }
