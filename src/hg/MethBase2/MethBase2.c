@@ -58,23 +58,38 @@ write_output(gzFile gz, const char *fmt, ...) {
 static void
 doMethBaseMetadata(gzFile gz) {
   char table_name[] = "MethBaseMeta";
+  char colors_table_name[] = "MethBaseMetaColors";
 
   char *db = cgiOptionalString("db");
   if (!db)
     errAbort("Missing required parameter: db.");
 
   struct sqlConnection *conn = hAllocConn(db);
-  struct slName *fieldList = sqlListFields(conn, table_name);
 
+  // Do colors
+  write_output(gz, "\"Colors\": {");  // open JSON dict for colors
   char query[1024];
-  sqlSafef(query, sizeof(query), "SELECT * FROM %s", table_name);
-
+  sqlSafef(query, sizeof(query), "SELECT * FROM %s", colors_table_name);
   struct sqlResult *sr = sqlGetResult(conn, query);
+  char **row;
+  boolean first = TRUE;
+  while ((row = sqlNextRow(sr)) != NULL) {
+    if (!first)
+      write_output(gz, ",");  // comma to separate rows
+    else
+      first = FALSE;
+    write_output(gz, "\"%s\": \"%s\"", row[0], row[1]);
+  }
+  write_output(gz, "},");  // close JSON dict for colors
+
+  // Do methylomes
+  struct slName *fieldList = sqlListFields(conn, table_name);
+  sqlSafef(query, sizeof(query), "SELECT * FROM %s", table_name);
+  sr = sqlGetResult(conn, query);
 
   write_output(gz, "\"MethBase2\": [");  // open JSON array for MethBase2
 
-  char **row;
-  boolean first = TRUE;
+  first = TRUE;
   while ((row = sqlNextRow(sr)) != NULL) {
     if (!first)
       write_output(gz, ",");  // comma to separate rows
