@@ -6,8 +6,8 @@ $(function() {
         "https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css", // datatable css
         "https://cdn.datatables.net/select/1.7.0/css/select.dataTables.min.css", // dt select css
     ];
-    const MAX_CHECKBOX_ELEMENTS = 20;  // max checkboxes to show in groupings
-                                       // on the lhs of the page
+    const MAX_CHECKBOX_ELEMENTS = 20;  // max checkboxes to show in groupings on the lhs of the page
+    const COLOR_ATTRIBUTE = "group";
 
     // --- CSS Styles ---
     const INLINE_CSS = `
@@ -38,7 +38,7 @@ $(function() {
         margin-bottom: 1em;
     }
     #filters > div > strong {
-        margin-bottom: 0.3em;
+        margin-bottom: 0.25em;
         font-weight: bold;
     }
     #filters label {
@@ -62,7 +62,7 @@ $(function() {
         vertical-align: top;
         /* white-space: nowrap; */
         /* overflow: hidden;          /* hide overflow */
-        min-width: 50px; /* Adjust width as needed */
+        min-width: 100px; /* Adjust width as needed */
     }
     #theDataTable .select-checkbox {
         width: 1em !important;   /* force narrow width */
@@ -84,14 +84,21 @@ $(function() {
     table.dataTable tbody tr:hover {
         background-color: #d3eaff; /* Light blue on hover */
     }
+    .color-box {
+        display: inline-block;
+        width: 1em;
+        height: 1em;
+        vertical-align: middle;
+        /* background-color set dynamically in JS */
+    }
     `;
 
     function toTitleCase(str) {
         return str
             .toLowerCase()
-            .split(/[_\s-]+/) // split on underscore, space, or hyphen
+            .split(/[_\s-]+/) // Split on underscore, space, or hyphen
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
+            .join(' '); // or ' ' or '' depending on desired format
     }
 
     const excludedFromCheckboxes = new Set([
@@ -149,7 +156,7 @@ $(function() {
         }));
     }
 
-    /// ADS: Uncomment this to ask the user on leaving page or refresh
+    /* ADS: Uncomment the lines below to ask the user on leaving page or refresh */
     // window.addEventListener('beforeunload', function (e) {
     //     e.preventDefault(); // some browsers need this?
     //     e.returnValue = '';
@@ -168,7 +175,7 @@ $(function() {
         container.id = "myTag";  // need to have some named scope here
         // style below is set to match UCSC vis control
         container.innerHTML = `
-        <label for="modeSwitcher" style="display: inline-block; width: 110px;">
+        <label for="modeSwitcher" style="display: inline-block; width: 110px; margin-bottom: 1em;">
             <b>Data&nbsp;type:&nbsp;</b>
         </label>
         <select class='normalText visDD' style='width: 70px' id="modeSwitcher">
@@ -195,7 +202,7 @@ $(function() {
     }
 
     function initTableAndFilters(allData) {
-        data = allData["MethBase2"];
+        let { MethBase2: data, Colors: colorMap, Index: accToRowId } = allData;
         if (!data.length) return;
 
         hgcentralUri = new URLSearchParams(allData["sessionDb.contents"]);
@@ -257,20 +264,21 @@ $(function() {
             deferRender: true,
             columns: columns,
             responsive: true,
-            // autoWidth: true,         // Helps columns shrink to fit content
+            // autoWidth: true,   // Helps columns shrink to fit content
             order: [[1, 'asc']],  // sort by the first real data column, not checkbox
-            pageLength: 100,   // show 50 rows per page instead of the default 10
+            pageLength: 50,       // show 50 rows per page instead of the default 10
             lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
             select: {
                 style: 'multi',
                 selector: 'td:first-child'
             },
             initComplete: function() {
+                // Check all appropriate checkboxes in amortized constant time per
                 const api = this.api();
-                api.rows().every(function() {
-                    const rowData = this.data();
-                    if (selectedAccessions.has(rowData.accession)) {
-                        this.select();  // Select (check) the row
+                selectedAccessions.forEach(accession => {
+                    const rowIndex = accToRowId[accession];
+                    if (rowIndex !== undefined) {
+                        api.row(rowIndex).select();
                     }
                 });
             },
@@ -347,20 +355,43 @@ $(function() {
             const groupDiv = document.createElement("div");
             groupDiv.dataset.colidx = colIdx;  // store the column index here
 
-            // Add the heading and the filtered checkboxes (only top N)
+            // Add the heading and the filtered checkboxes
+            // (only top MAX_CHECKBOX_ELEMENTS)
             const heading = document.createElement("strong");
             heading.textContent = toTitleCase(key);
             groupDiv.appendChild(heading);
 
-            const topToShow = sortedPossibleValues[key]
-                  .filter(([val, _]) => val.trim().toUpperCase() !== 'NA')
-                  .slice(0, MAX_CHECKBOX_ELEMENTS);
+            // Keep only the most abundant top MAX_CHECKBOX_ELEMENTS entries
+            let topToShow = sortedPossibleValues[key]
+                .filter(([val, _]) => val.trim().toUpperCase() !== 'NA')
+                .slice(0, MAX_CHECKBOX_ELEMENTS);
+            // If there is an "other" entry, put it at the end
+            let otherKey = null;
+            let otherValue = null;
+            topToShow = topToShow.filter(([val, value]) => {
+                if (val.toLowerCase() === "other") {
+                    otherKey = val;
+                    otherValue = value;
+                    return false;
+                }
+                return true;
+            });
+            if (otherValue !== null) {
+                topToShow.push([otherKey, otherValue]);
+            }
+
             topToShow.forEach(([val, count]) => {
                 const label = document.createElement("label");
                 const checkbox = document.createElement("input");
                 checkbox.type = "checkbox";
                 checkbox.value = escapeRegex(val);
                 label.appendChild(checkbox);
+                if (key === COLOR_ATTRIBUTE) {
+                    const colorBox = document.createElement("span");
+                    colorBox.classList.add("color-box");
+                    colorBox.style.backgroundColor = colorMap[val];  // dynamic color
+                    label.appendChild(colorBox);
+                }
                 label.appendChild(document.createTextNode(`${val} (${count})`));
                 groupDiv.appendChild(label);
             });
@@ -424,12 +455,16 @@ $(function() {
         const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
         const now = Date.now();
-        const cachedStr = localStorage.getItem(CACHE_KEY);
         const cachedTimestamp = parseInt(localStorage.getItem(CACHE_TIMESTAMP_KEY), 10);
 
-        let cachedData = cachedStr ? JSON.parse(cachedStr) : null;
-        let useCache = cachedData &&
-            cachedTimestamp && (now - cachedTimestamp < CACHE_EXPIRY_MS);
+        let cachedData = null;
+        let useCache = false;
+
+        if (cachedTimestamp && (now - cachedTimestamp < CACHE_EXPIRY_MS)) {
+            const cachedStr = localStorage.getItem(CACHE_KEY);
+            cachedData = cachedStr ? JSON.parse(cachedStr) : null;
+            useCache = !!cachedData;
+        }
 
         const params = new URLSearchParams({
             "hgsid": hgsid,
@@ -451,15 +486,25 @@ $(function() {
         fetch(request)
             .then(res => res.json())
             .then(newData => {
+                let mergedData;
                 if (useCache) {
-                    newData["MethBase2"] = cachedData;
-                    initTableAndFilters(newData);
+                    mergedData = {...newData, ...cachedData};
                 } else {
-                    // Save new data to cache
-                    localStorage.setItem(CACHE_KEY, JSON.stringify(newData["MethBase2"]))
+                    const idToIndexMap = {};
+                    newData["MethBase2"].forEach((row, index) => {
+                        idToIndexMap[row.accession] = index;
+                    });
+                    mergedData = newData;
+                    mergedData["Index"] = idToIndexMap;
+                    // Save the merged data to cache
+                    localStorage.setItem(CACHE_KEY, JSON.stringify({
+                        "MethBase2": newData["MethBase2"],
+                        "Colors": newData["Colors"],
+                        "Index": idToIndexMap,
+                    }));
                     localStorage.setItem(CACHE_TIMESTAMP_KEY, now.toString());
-                    initTableAndFilters(newData);
                 }
+                initTableAndFilters(mergedData);
             });
     }
 
